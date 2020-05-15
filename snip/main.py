@@ -1,7 +1,8 @@
 import os
 import sys
 import argparse
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+
 
 from dataset import Dataset
 from model import Model
@@ -55,7 +56,7 @@ def main():
     tf.set_random_seed(9)
 
     # Model
-    model = Model(num_classes=dataset.num_classes, **vars(args))
+    model = Model(num_classes=dataset.num_classes, **vars(args)) # args 에 있는 값으로 주는 것 같은데, bp 와 ap 가 똑같다??
     model.construct_model()
 
     # Session
