@@ -37,6 +37,7 @@ class Dataset(object):
             path = os.path.join(self.path_data, 'MNIST')
 
             # TODO: need port forwarding docker container's tcp port to host's tcp port
+            # TODO: search how to use mnist library imported above
             # for resource in MNIST_RESOURCES:
                 # url = 'http://yann.lecun.com/exdb/mnist/{}'.format(resource)
                 # download(path, url)
