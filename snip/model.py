@@ -35,6 +35,9 @@ class Model(object):
         self.initializer_w_ap = initializer_w_ap
         self.initializer_b_ap = initializer_b_ap
 
+    '''
+    Create Computational Graph
+    '''
     def construct_model(self):
         # Base-learner
         self.net = net = load_network(
@@ -48,6 +51,7 @@ class Model(object):
         # Input nodes
         self.inputs = net.inputs
 
+        # This values are control model running option
         self.compress = tf.placeholder_with_default(False, [])
         self.is_train = tf.placeholder_with_default(False, [])
         self.pruned = tf.placeholder_with_default(False, [])
@@ -57,7 +61,9 @@ class Model(object):
 
         # For convenience
         # e.g., ['w1', 'w2', 'w3', 'w4', 'b1', 'b2', 'b3', 'b4']
-        prn_keys = [k for p in ['w', 'b'] for k in weights.keys() if p in k] 
+        prn_keys = [k for p in ['w', 'b'] for k in weights.keys() if p in k]
+        # Create partial function
+        # https://docs.python.org/2/library/functools.html#functools.partial
         var_no_train = functools.partial(tf.Variable, trainable=False, dtype=tf.float32)
 
         # Model
@@ -77,6 +83,8 @@ class Model(object):
             return create_sparse_mask(cs, self.target_sparsity)
 
         mask = tf.cond(self.compress, lambda: get_sparse_mask(), lambda: mask_prev)
+        # Update `mask_prev` with `mask`
+        # To mark dependencies, use `control_dependencies` method
         with tf.control_dependencies([tf.assign(mask_prev[k], v) for k,v in mask.items()]):
             w_final = apply_mask(weights, mask)
 
@@ -179,8 +187,11 @@ def compute_sparsity(weights, target_keys):
 def create_sparse_mask(mask, target_sparsity):
     def threshold_vec(vec, target_sparsity):
         num_params = vec.shape.as_list()[0]
-        kappa = int(round(num_params * (1. - target_sparsity))) # target_sparsity(float 형) 을 통해 kappa 를 계산한다. kappa = 남길 parameter 개수
-        topk, ind = tf.nn.top_k(vec, k=kappa, sorted=True) # 여기서 상위 kappa 개를 뽑는다
+        # Calculate how much parameter to leave using `target_sparsity`
+        # `kappa` - number of remained parameter after pruning
+        kappa = int(round(num_params * (1. - target_sparsity)))
+        # Choosing the weight to leave (number: kappa)
+        topk, ind = tf.nn.top_k(vec, k=kappa, sorted=True)
         mask_sparse_v = tf.sparse_to_dense(ind, tf.shape(vec),
             tf.ones_like(ind, dtype=tf.float32), validate_indices=False)
         return mask_sparse_v
