@@ -51,28 +51,28 @@ def main():
     # Dataset
     dataset = Dataset(**vars(args))
 
-    # Reset the default graph and set a graph-level seed
-    tf.reset_default_graph()
-    tf.set_random_seed(9)
+    # # Reset the default graph and set a graph-level seed
+    # tf.reset_default_graph()
+    # tf.set_random_seed(9)
 
-    # Model
-    model = Model(num_classes=dataset.num_classes, **vars(args)) # args 에 있는 값으로 주는 것 같은데, bp 와 ap 가 똑같다??
-    model.construct_model()
+    # # Model
+    # model = Model(num_classes=dataset.num_classes, **vars(args)) 
+    # model.construct_model()
 
-    # Session
-    sess = tf.InteractiveSession()
-    tf.global_variables_initializer().run()
-    tf.local_variables_initializer().run()
+    # # Session
+    # sess = tf.InteractiveSession()
+    # tf.global_variables_initializer().run()
+    # tf.local_variables_initializer().run()
 
-    # Prune
-    prune.prune(args, model, sess, dataset)
+    # # Prune
+    # prune.prune(args, model, sess, dataset)
 
-    # Train and test
-    train.train(args, model, sess, dataset)
-    test.test(args, model, sess, dataset)
+    # # Train and test
+    # train.train(args, model, sess, dataset)
+    # test.test(args, model, sess, dataset)
 
-    sess.close()
-    sys.exit()
+    # sess.close()
+    # sys.exit()
 
 
 if __name__ == "__main__":
