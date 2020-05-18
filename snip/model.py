@@ -39,10 +39,11 @@ class Model(object):
         # Base-learner
         self.net = net = load_network(
             self.datasource, self.arch, self.num_classes,
-            self.initializer_w_bp, self.initializer_b_bp, # 여기서 이렇게
-            self.initializer_w_ap, self.initializer_b_ap, # bp ap 를 줌
+            # bp: before pruning
+            self.initializer_w_bp, self.initializer_b_bp,
+            # ap: after pruning
+            self.initializer_w_ap, self.initializer_b_ap,
         )
-
 
         # Input nodes
         self.inputs = net.inputs
@@ -52,10 +53,11 @@ class Model(object):
         self.pruned = tf.placeholder_with_default(False, [])
 
         # Switch for weights to use (before or after pruning)
-        weights = tf.cond(self.pruned, lambda: net.weights_ap, lambda: net.weights_bp) # pruned = True 이면 ap, pruned = False 이면 bp
+        weights = tf.cond(self.pruned, lambda: net.weights_ap, lambda: net.weights_bp)
 
         # For convenience
-        prn_keys = [k for p in ['w', 'b'] for k in weights.keys() if p in k] # ['w1', 'w2', 'w3', 'w4', 'b1', 'b2', 'b3', 'b4']
+        # e.g., ['w1', 'w2', 'w3', 'w4', 'b1', 'b2', 'b3', 'b4']
+        prn_keys = [k for p in ['w', 'b'] for k in weights.keys() if p in k] 
         var_no_train = functools.partial(tf.Variable, trainable=False, dtype=tf.float32)
 
         # Model
@@ -66,13 +68,15 @@ class Model(object):
             w_mask = apply_mask(weights, mask_init)
             logits = net.forward_pass(w_mask, self.inputs['input'],
                 self.is_train, trainable=False)
-            loss = tf.reduce_mean(compute_loss(self.inputs['label'], logits)) # 수식 (3)번 계산 (각 loss 의 평균)
-            grads = tf.gradients(loss, [mask_init[k] for k in prn_keys]) # 수식 (5)번 계산 (편미분)
+            loss = tf.reduce_mean(compute_loss(self.inputs['label'], logits))
+            grads = tf.gradients(loss, [mask_init[k] for k in prn_keys])
+            # Map keys and gradients
             gradients = dict(zip(prn_keys, grads))
-            cs = normalize_dict({k: tf.abs(v) for k, v in gradients.items()}) # 수식 (6) 번 계산. cs = connection sensitivity
+            # Calculate connection sensitivity
+            cs = normalize_dict({k: tf.abs(v) for k, v in gradients.items()})
             return create_sparse_mask(cs, self.target_sparsity)
 
-        mask = tf.cond(self.compress, lambda: get_sparse_mask(), lambda: mask_prev) # compress =  True 이면 sparse_mask 를 사용, compress = False 이면 mask_prev 사용
+        mask = tf.cond(self.compress, lambda: get_sparse_mask(), lambda: mask_prev)
         with tf.control_dependencies([tf.assign(mask_prev[k], v) for k,v in mask.items()]):
             w_final = apply_mask(weights, mask)
 
