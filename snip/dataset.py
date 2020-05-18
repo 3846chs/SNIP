@@ -34,15 +34,15 @@ class Dataset(object):
             os.umask(original_umask)
 
         if self.datasource == 'mnist':
+            path = os.path.join(self.path_data, 'MNIST')
+
             # TODO: need port forwarding docker container's tcp port to host's tcp port
             # for resource in MNIST_RESOURCES:
-            #     path = os.path.join(self.path_data, resource)
-            #     print(path)
-            #     url = 'http://yann.lecun.com/exdb/mnist/{}'.format(resource)
-            #     download(path, url)
+                # url = 'http://yann.lecun.com/exdb/mnist/{}'.format(resource)
+                # download(path, url)
 
             self.num_classes = 10
-            self.dataset = mnist.read_data(os.path.join(self.path_data, 'MNIST'))
+            self.dataset = mnist.read_data(path)
         elif self.datasource == 'cifar-10':
             self.num_classes = 10
             self.dataset = cifar.read_data(os.path.join(self.path_data, 'cifar-10-batches-py'))
