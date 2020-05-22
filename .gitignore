@@ -120,3 +120,4 @@ dmypy.json
 *.swo
 
 snip/data/
+snip/logs/
