@@ -43,7 +43,6 @@ class Model(object):
             self.initializer_w_ap, self.initializer_b_ap, # bp ap 를 줌
         )
 
-
         # Input nodes
         self.inputs = net.inputs
 

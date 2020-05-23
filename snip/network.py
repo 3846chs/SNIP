@@ -30,6 +30,15 @@ def load_network(
         'vgg-like': lambda: VGG(
             initializer_w_bp, initializer_b_bp, initializer_w_ap, initializer_b_ap,
             datasource, num_classes, version='like'),
+        'wrn-16-8': lambda: WRN(
+            initializer_w_bp, initializer_b_bp, initializer_w_ap, initializer_b_ap,
+            datasource, num_classes, depth=16, k=8),
+        'wrn-16-10': lambda: WRN(
+            initializer_w_bp, initializer_b_bp, initializer_w_ap, initializer_b_ap,
+            datasource, num_classes, depth=16, k=10),
+        'wrn-22-8': lambda: WRN(
+            initializer_w_bp, initializer_b_bp, initializer_w_ap, initializer_b_ap,
+            datasource, num_classes, depth=22, k=8),
     }
     return networks[arch]()
 
