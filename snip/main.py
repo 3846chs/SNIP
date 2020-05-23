@@ -56,7 +56,7 @@ def main():
     tf.set_random_seed(9)
 
     # Model
-    model = Model(num_classes=dataset.num_classes, **vars(args)) # args 에 있는 값으로 주는 것 같은데, bp 와 ap 가 똑같다??
+    model = Model(num_classes=dataset.num_classes, **vars(args)) 
     model.construct_model()
 
     # Session

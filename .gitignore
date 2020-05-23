@@ -119,5 +119,7 @@ dmypy.json
 *.swp
 *.swo
 
-snip/data/
+# custom
 snip/logs/
+snip/data/
+logs/
