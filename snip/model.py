@@ -48,6 +48,8 @@ class Model(object):
             self.initializer_w_ap, self.initializer_b_ap,
         )
 
+        print('network number of params: ', net.num_params)
+
         # Input nodes
         self.inputs = net.inputs
 
