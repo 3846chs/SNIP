@@ -1,4 +1,5 @@
 import tensorflow.compat.v1 as tf
+import sys
 tf.disable_v2_behavior()
 
 from functools import reduce
@@ -492,15 +493,15 @@ class WRN(object):
             weights['init-b0'] = tf.get_variable('init-b0', [16], **b_params)
             self.get_group_weights_biases(weights, 'group0', 
                                           16, self.widths[0], 
-                                          w_params, b_params
+                                          w_params, b_params,
                                           self.num_block)
             self.get_group_weights_biases(weights, 'group1', 
                                           self.widths[0], self.widths[1], 
-                                          w_params, b_params
+                                          w_params, b_params,
                                           self.num_block)
-            self.get_group_weights_biases(weights, 'group1', 
+            self.get_group_weights_biases(weights, 'group2', 
                                           self.widths[1], self.widths[2], 
-                                          w_params, b_params
+                                          w_params, b_params,
                                           self.num_block)
             weights['fc-w0'] = tf.get_variable('fc-w0', 
                                                [self.widths[2], self.num_classes], 
@@ -508,16 +509,18 @@ class WRN(object):
             weights['fc-b0'] = tf.get_variable('fc-b0',
                                                [self.num_classes], 
                                                **b_params)
+            # print(weights.keys())
+            sys.exit("TODO: construct WRN model")
         return weights
     
-    def get_group_weights_biases(weights, tag_groub, ni, no, w_params, b_params, count_block):
+    def get_group_weights_biases(self, weights, tag_groub, ni, no, w_params, b_params, count_block):
         for i in range(count_block):
             tag_block = '{}-block{}'.format(tag_groub, i)
             self.get_block_weights_biases(weights, tag_block, 
                                           ni if i == 0 else no, no, 
                                           w_params, b_params)
 
-    def get_block_weights_biases(weights, tag_block, ni, no, w_params, b_params):
+    def get_block_weights_biases(self, weights, tag_block, ni, no, w_params, b_params):
         tag_w0 = '{}-w0'.format(tag_block)
         weights[tag_w0] = tf.get_variable(tag_w0, [3, 3, ni, no], **w_params)
         tag_b0 = '{}-b0'.format(tag_block)
