@@ -49,6 +49,10 @@ def get_initializer(initializer, dtype):
         return tf.zeros_initializer(dtype=dtype)
     elif initializer == 'vs':
         return tf.variance_scaling_initializer(dtype=dtype)
+    elif initializer == 'xavier':
+        return tf.glorot_normal_initializer(dtype=dtype)
+    elif initializer == 'he':
+        return tf.variance_scaling_initializer(dtype=dtype)
     else:
         raise NotImplementedError
 
