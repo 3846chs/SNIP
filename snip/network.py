@@ -549,20 +549,20 @@ class WRN(object):
         x = tf.nn.conv2d(inputs, weights['init-w0'], [1, init_st, init_st, 1], 'SAME') + weights['init-b0']
         # print('x shape', x.shape)
         g0 = self.forward_pass_group(weights, 'group0', x, is_train, trainable, bn_params, 1, self.num_block)
-        print('g0 shape', g0.shape)
+        # print('g0 shape', g0.shape)
         g1 = self.forward_pass_group(weights, 'group1', g0, is_train, trainable, bn_params, 2, self.num_block)
-        print('g1 shape', g1.shape)
+        # print('g1 shape', g1.shape)
         g2 = self.forward_pass_group(weights, 'group2', g1, is_train, trainable, bn_params, 2, self.num_block)
-        print('g1 shape', g2.shape)
+        # print('g1 shape', g2.shape)
         o = tf.layers.batch_normalization(g2, **bn_params)
         o = tf.nn.relu(o)
-        print('o shape', o.shape)
+        # print('o shape', o.shape)
         # global average pooling
         gap = tf.layers.flatten(tf.reduce_mean(o, axis=[1, 2], keepdims=True))
-        print('gap shape', gap.shape)
-
-        sys.exit("TODO: construct WRN model")
-        return fc2
+        # print('gap shape', gap.shape)
+        logits = tf.matmul(gap, weights['fc-w0']) + weights['fc-b0']
+        # print('logits shape', logits.shape)
+        return logits
 
     def forward_pass_group(self, weights, tag_groub, inputs, 
                            is_train, trainable, bn_params, stride, count_block):
