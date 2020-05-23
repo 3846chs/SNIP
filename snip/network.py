@@ -432,3 +432,80 @@ class VGG(object):
             inputs = tf.matmul(inputs, weights['w15']) + weights['b15']
 
         return inputs
+
+
+class WRN(object):
+    def __init__(self,
+                 initializer_w_bp,
+                 initializer_b_bp,
+                 initializer_w_ap,
+                 initializer_b_ap,
+                 datasource,
+                 num_classes,
+                 depth,
+                 k,
+                 ):
+        self.datasource = datasource
+        self.num_classes = num_classes
+        self.name = 'WRN-{}-{}'.format(depth, k)
+        self.input_dims = [64, 64, 3] if self.datasource == 'tiny-imagenet' else [32, 32, 3] # h,w,c
+        self.inputs = self.construct_inputs()
+        self.weights_bp = self.construct_weights(initializer_w_bp, initializer_b_bp, False, 'bp')
+        self.weights_ap = self.construct_weights(initializer_w_ap, initializer_b_ap, True, 'ap')
+        self.num_params = sum([static_size(v) for v in self.weights_ap.values()])
+
+    def construct_inputs(self):
+        return {
+            'input': tf.placeholder(tf.float32, [None] + self.input_dims),
+            'label': tf.placeholder(tf.int32, [None]),
+        }
+
+    def construct_weights(self, initializer_w, initializer_b, trainable, scope):
+        dtype = tf.float32
+        w_params = {
+            'initializer': get_initializer(initializer_w, dtype),
+            'dtype': dtype,
+            'trainable': trainable,
+            'collections': [self.name, tf.GraphKeys.GLOBAL_VARIABLES],
+        }
+        b_params = {
+            'initializer': get_initializer(initializer_b, dtype),
+            'dtype': dtype,
+            'trainable': trainable,
+            'collections': [self.name, tf.GraphKeys.GLOBAL_VARIABLES],
+        }
+        weights = {}
+        with tf.variable_scope(scope):
+            weights['init-w0'] = tf.get_variable('init-w0', [3, 3, 3, 16], **w_params)
+            weights['init-b0'] = tf.get_variable('init-b0', [16], **b_params)
+        return weights
+    
+    def get_group_weights_biases(weights, tag_groub, ni, no, w_params, b_params, count_block):
+        for i in range(count_block):
+            tag_block = '{}-block{}'.format(tag_groub, i)
+            self.get_block_weights_biases(weights, 
+                                          tag_block, 
+                                          ni if i == 0 else no, 
+                                          no, 
+                                          w_params, 
+                                          b_params)
+
+    def get_block_weights_biases(weights, tag_block, ni, no, w_params, b_params):
+        tag_w1 = '{}-w1'.format(tag_block)
+        weights[tag_w1] = tf.get_variable(tag_w1, [3, 3, ni, no], **w_params)
+        tag_b1 = '{}-b1'.format(tag_block)
+        weights[tag_b1] = tf.get_variable(tag_b1, [no], **b_params)
+        tag_w2 = '{}-w2'.format(tag_block)
+        weights[tag_w2] = tf.get_variable(tag_w2, [3, 3, no, no], **w_params)
+        tag_b2 = '{}-b2'.format(tag_block)
+        weights[tag_b2] = tf.get_variable(tag_b2, [no], **b_params)
+        if ni != no:
+            tag_w3 = '{}-w3'.format(tag_block)
+            weights[tag_w3] = tf.get_variable(tag_w3, [1, 1, ni, no], **w_params)
+            tag_b3 = '{}-b3'.format(tag_block)
+            weights[tag_b3] = tf.get_variable(tag_b3, [no], **b_params)
+        return
+
+    def forward_pass(self, weights, inputs, is_train, trainable=True):
+        sys.exit("TODO: construct WRN model")
+        return fc2
