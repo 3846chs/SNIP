@@ -445,6 +445,9 @@ class WRN(object):
                  depth,
                  k,
                  ):
+        assert (depth - 4) % 6 == 0, 'depth should be 6n+4'
+        self.num_block = (depth - 4) // 6
+        self.widths = [int(v * k) for v in (16, 32, 64)]
         self.datasource = datasource
         self.num_classes = num_classes
         self.name = 'WRN-{}-{}'.format(depth, k)
@@ -478,32 +481,47 @@ class WRN(object):
         with tf.variable_scope(scope):
             weights['init-w0'] = tf.get_variable('init-w0', [3, 3, 3, 16], **w_params)
             weights['init-b0'] = tf.get_variable('init-b0', [16], **b_params)
+            self.get_group_weights_biases(weights, 'group0', 
+                                          16, self.widths[0], 
+                                          w_params, b_params
+                                          self.num_block)
+            self.get_group_weights_biases(weights, 'group1', 
+                                          self.widths[0], self.widths[1], 
+                                          w_params, b_params
+                                          self.num_block)
+            self.get_group_weights_biases(weights, 'group1', 
+                                          self.widths[1], self.widths[2], 
+                                          w_params, b_params
+                                          self.num_block)
+            weights['fc-w0'] = tf.get_variable('fc-w0', 
+                                               [self.widths[2], self.num_classes], 
+                                               **w_params)
+            weights['fc-b0'] = tf.get_variable('fc-b0',
+                                               [self.num_classes], 
+                                               **b_params)
         return weights
     
     def get_group_weights_biases(weights, tag_groub, ni, no, w_params, b_params, count_block):
         for i in range(count_block):
             tag_block = '{}-block{}'.format(tag_groub, i)
-            self.get_block_weights_biases(weights, 
-                                          tag_block, 
-                                          ni if i == 0 else no, 
-                                          no, 
-                                          w_params, 
-                                          b_params)
+            self.get_block_weights_biases(weights, tag_block, 
+                                          ni if i == 0 else no, no, 
+                                          w_params, b_params)
 
     def get_block_weights_biases(weights, tag_block, ni, no, w_params, b_params):
+        tag_w0 = '{}-w0'.format(tag_block)
+        weights[tag_w0] = tf.get_variable(tag_w0, [3, 3, ni, no], **w_params)
+        tag_b0 = '{}-b0'.format(tag_block)
+        weights[tag_b0] = tf.get_variable(tag_b0, [no], **b_params)
         tag_w1 = '{}-w1'.format(tag_block)
-        weights[tag_w1] = tf.get_variable(tag_w1, [3, 3, ni, no], **w_params)
+        weights[tag_w1] = tf.get_variable(tag_w1, [3, 3, no, no], **w_params)
         tag_b1 = '{}-b1'.format(tag_block)
         weights[tag_b1] = tf.get_variable(tag_b1, [no], **b_params)
-        tag_w2 = '{}-w2'.format(tag_block)
-        weights[tag_w2] = tf.get_variable(tag_w2, [3, 3, no, no], **w_params)
-        tag_b2 = '{}-b2'.format(tag_block)
-        weights[tag_b2] = tf.get_variable(tag_b2, [no], **b_params)
         if ni != no:
-            tag_w3 = '{}-w3'.format(tag_block)
-            weights[tag_w3] = tf.get_variable(tag_w3, [1, 1, ni, no], **w_params)
-            tag_b3 = '{}-b3'.format(tag_block)
-            weights[tag_b3] = tf.get_variable(tag_b3, [no], **b_params)
+            tag_w2 = '{}-w2'.format(tag_block)
+            weights[tag_w2] = tf.get_variable(tag_w2, [1, 1, ni, no], **w_params)
+            tag_b2 = '{}-b2'.format(tag_block)
+            weights[tag_b2] = tf.get_variable(tag_b2, [no], **b_params)
         return
 
     def forward_pass(self, weights, inputs, is_train, trainable=True):
