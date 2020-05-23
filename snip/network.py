@@ -509,8 +509,11 @@ class WRN(object):
             weights['fc-b0'] = tf.get_variable('fc-b0',
                                                [self.num_classes], 
                                                **b_params)
-            # print(weights.keys())
-            sys.exit("TODO: construct WRN model")
+            # for k in weights:
+            #     print(k)
+            #     print(weights[k])
+            #     print()
+            # sys.exit("TODO: construct WRN model")
         return weights
     
     def get_group_weights_biases(self, weights, tag_groub, ni, no, w_params, b_params, count_block):
@@ -537,5 +540,64 @@ class WRN(object):
         return
 
     def forward_pass(self, weights, inputs, is_train, trainable=True):
+        bn_params = {
+            'training': is_train,
+            'trainable': trainable,
+        }
+        init_st = 2 if self.datasource == 'tiny-imagenet' else 1
+
+        x = tf.nn.conv2d(inputs, weights['init-w0'], [1, init_st, init_st, 1], 'SAME') + weights['init-b0']
+        # print('x shape', x.shape)
+        g0 = self.forward_pass_group(weights, 'group0', x, is_train, trainable, bn_params, 1, self.num_block)
+        print('g0 shape', g0.shape)
+        g1 = self.forward_pass_group(weights, 'group1', g0, is_train, trainable, bn_params, 2, self.num_block)
+        print('g1 shape', g1.shape)
+        g2 = self.forward_pass_group(weights, 'group2', g1, is_train, trainable, bn_params, 2, self.num_block)
+        print('g1 shape', g2.shape)
+        o = tf.layers.batch_normalization(g2, **bn_params)
+        o = tf.nn.relu(o)
+        print('o shape', o.shape)
+        # global average pooling
+        gap = tf.layers.flatten(tf.reduce_mean(o, axis=[1, 2], keepdims=True))
+        print('gap shape', gap.shape)
+
         sys.exit("TODO: construct WRN model")
         return fc2
+
+    def forward_pass_group(self, weights, tag_groub, inputs, 
+                           is_train, trainable, bn_params, stride, count_block):
+        o = inputs
+        for i in range(count_block):
+            tag_block = '{}-block{}'.format(tag_groub, i)
+            o = self.forward_pass_block(weights, tag_block, o,
+                                        is_train, trainable, bn_params, 
+                                        stride if i == 0 else 1)
+        return o
+    
+    def forward_pass_block(self, weights, tag_block, x, 
+                           is_train, trainable, bn_params, stride):
+        tag_w0 = '{}-w0'.format(tag_block)
+        tag_b0 = '{}-b0'.format(tag_block)
+        o1 = self.forward_pass_bn_relu(x, bn_params)
+        y = self.forward_pass_conv2d(o1, {'w': weights[tag_w0], 'b': weights[tag_b0]}, stride)
+
+        tag_w1 = '{}-w1'.format(tag_block)
+        tag_b1 = '{}-b1'.format(tag_block)
+        o2 = self.forward_pass_bn_relu(y, bn_params)
+        z = self.forward_pass_conv2d(o2, {'w': weights[tag_w1], 'b': weights[tag_b1]}, 1)
+        
+        tag_w2 = '{}-w2'.format(tag_block)
+        tag_b2 = '{}-b2'.format(tag_block)
+        if tag_w2 in weights:
+            return z + self.forward_pass_conv2d(o1, {'w': weights[tag_w2], 'b': weights[tag_b2]}, stride)
+        else:
+            return z + x
+    
+    def forward_pass_bn_relu(self, inputs, bn_params):
+        o = tf.layers.batch_normalization(inputs, **bn_params)
+        o = tf.nn.relu(o)
+        return o
+    
+    def forward_pass_conv2d(self, inputs, filt, st=1):
+        o = tf.nn.conv2d(inputs, filt['w'], [1, st, st, 1], 'SAME') + filt['b']
+        return o
