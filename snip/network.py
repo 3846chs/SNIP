@@ -37,7 +37,7 @@ def load_network(
 def get_initializer(initializer, dtype):
     if initializer == 'zeros':
         return tf.zeros_initializer(dtype=dtype)
-    elif initializer == 'vs':
+    elif initializer == 'vs-h':
         return tf.variance_scaling_initializer(dtype=dtype) # VS-H
     elif initializer == 'vs-x':
         return tf.glorot_normal_initializer(dtype=dtype) # VS-X
