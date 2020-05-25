@@ -37,8 +37,16 @@ def load_network(
 def get_initializer(initializer, dtype):
     if initializer == 'zeros':
         return tf.zeros_initializer(dtype=dtype)
-    elif initializer == 'vs':
-        return tf.variance_scaling_initializer(dtype=dtype)
+    elif initializer == 'vs-h':
+        return tf.variance_scaling_initializer(dtype=dtype) # VS-H
+    elif initializer == 'vs-x':
+        return tf.glorot_normal_initializer(dtype=dtype) # VS-X
+    elif initializer == 'rn':
+        return tf.random_normal(dtype=dtype) # RN
+    elif initializer == 'tn':
+        return tf.truncated_normal(dtype=dtype) # TN
+
+
     else:
         raise NotImplementedError
 

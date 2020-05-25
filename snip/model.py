@@ -121,6 +121,8 @@ def get_optimizer(optimizer, lr):
         optimizer = tf.train.GradientDescentOptimizer(lr)
     elif optimizer == 'momentum':
         optimizer = tf.train.MomentumOptimizer(lr, 0.9)
+    elif optimizer == 'adam':
+        optimizer = tf.train.AdamOptimizer(lr)
     else:
         raise NotImplementedError
     return optimizer
