@@ -44,10 +44,10 @@ def train(args, model, sess, dataset):
         if (itr+1) % args.check_interval == 0:
             writer['train'].add_summary(result[1], itr)
             writer['val'].add_summary(result_val[1], itr)
-            pstr = '(train/val) los:{:.3f}/{:.3f} acc:{:.3f}/{:.3f} spa:{:.3f}'.format(
+            pstr = '(train/val) los:{:.3f}/{:.3f} acc:{:.3f}/{:.3f} spa:{:.3f} lr:{:.3f}'.format(
                 result[0]['los'], result_val[0]['los'],
                 result[0]['acc'], result_val[0]['acc'],
-                result[2],
+                result[2], result[0]['lr'],
             )
             print('itr{}: {} (t:{:.1f})'.format(itr+1, pstr, time.time() - t_start))
             t_start = time.time()

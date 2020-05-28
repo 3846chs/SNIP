@@ -122,6 +122,7 @@ class Model(object):
             'los': opt_loss,
             'acc': output_accuracy,
             'acc_individual': output_accuracy_individual,
+            'lr': lr,
         }
         self.sparsity = compute_sparsity(w_final, prn_keys)
 
