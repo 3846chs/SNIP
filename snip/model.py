@@ -16,6 +16,9 @@ class Model(object):
                  lr,
                  decay_boundaries,
                  decay_values,
+                 decay_steps,
+                 end_learning_rate,
+                 power,
                  initializer_w_bp,
                  initializer_b_bp,
                  initializer_w_ap,
@@ -30,6 +33,9 @@ class Model(object):
         self.lr = lr
         self.decay_boundaries = decay_boundaries
         self.decay_values = decay_values
+        self.decay_steps = decay_steps
+        self.end_learning_rate = end_learning_rate
+        self.power = power
         self.initializer_w_bp = initializer_w_bp
         self.initializer_b_bp = initializer_b_bp
         self.initializer_w_ap = initializer_w_ap
@@ -100,7 +106,8 @@ class Model(object):
 
         # Optimization
         optim, lr, global_step = prepare_optimization(opt_loss, self.optimizer, self.lr_decay_type,
-            self.lr, self.decay_boundaries, self.decay_values)
+            self.lr, self.decay_boundaries, self.decay_values, self.decay_steps, 
+            self.end_learning_rate, self.power)
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS) # TF version issue
         with tf.control_dependencies(update_ops):
             self.train_op = optim.minimize(opt_loss, global_step=global_step)
@@ -139,13 +146,21 @@ def get_optimizer(optimizer, lr):
         raise NotImplementedError
     return optimizer
 
-def prepare_optimization(loss, optimizer, lr_decay_type, learning_rate, boundaries, values):
+def prepare_optimization(loss, optimizer, lr_decay_type, learning_rate, 
+                         boundaries, values, decay_steps, end_learning_rate, power):
     global_step = tf.Variable(0, trainable=False)
     if lr_decay_type == 'constant':
         learning_rate = tf.constant(learning_rate)
     elif lr_decay_type == 'piecewise':
         assert len(boundaries)+1 == len(values)
         learning_rate = tf.train.piecewise_constant(global_step, boundaries, values)
+    elif lr_decay_type == 'polynomial':
+        learning_rate = tf.train.polynomial_decay(
+                            learning_rate,
+                            global_step, 
+                            decay_steps,
+                            end_learning_rate,
+                            power)
     else:
         raise NotImplementedError
     optim = get_optimizer(optimizer, learning_rate)

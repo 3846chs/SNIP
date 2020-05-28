@@ -28,6 +28,10 @@ def parse_arguments():
     parser.add_argument('--lr', type=float, default=1e-1, help='initial learning rate')
     parser.add_argument('--decay_boundaries', nargs='+', type=int, default=[], help='boundaries for piecewise_constant decay')
     parser.add_argument('--decay_values', nargs='+', type=float, default=[], help='values for piecewise_constant decay')
+    # for polynomial learning rate decay
+    parser.add_argument('--decay_steps', type=float, default=10000, help='TBD')
+    parser.add_argument('--end_learning_rate', type=float, default=1e-1, help='TBD')
+    parser.add_argument('--power', type=float, default=2.0, help='TBD')
     # Initialization
     parser.add_argument('--initializer_w_bp', type=str, default='xavier', help='initializer for w before pruning')
     parser.add_argument('--initializer_b_bp', type=str, default='zeros', help='initializer for b before pruning')
