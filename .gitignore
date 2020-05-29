@@ -119,4 +119,4 @@ dmypy.json
 *.swp
 *.swo
 
-snip/data/
+#snip/data/
