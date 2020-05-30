@@ -24,6 +24,7 @@ def parse_arguments():
     parser.add_argument('--batch_size', type=int, default=100, help='number of examples per mini-batch')
     parser.add_argument('--train_iterations', type=int, default=10000, help='number of training iterations')
     parser.add_argument('--optimizer', type=str, default='sgd', help='optimizer of choice')
+    parser.add_argument('--weight_decay', type=float, default=5e-4, help='TBD)
     parser.add_argument('--lr_decay_type', type=str, default='constant', help='learning rate decay type')
     parser.add_argument('--lr', type=float, default=1e-1, help='initial learning rate')
     parser.add_argument('--decay_boundaries', nargs='+', type=int, default=[], help='boundaries for piecewise_constant decay')

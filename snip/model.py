@@ -12,6 +12,7 @@ class Model(object):
                  num_classes,
                  target_sparsity,
                  optimizer,
+                 weight_decay,
                  lr_decay_type,
                  lr,
                  decay_boundaries,
@@ -29,6 +30,7 @@ class Model(object):
         self.num_classes = num_classes
         self.target_sparsity = target_sparsity
         self.optimizer = optimizer
+        self.weight_decay = weight_decay
         self.lr_decay_type = lr_decay_type
         self.lr = lr
         self.decay_boundaries = decay_boundaries
@@ -101,7 +103,7 @@ class Model(object):
 
         # Loss
         opt_loss = tf.reduce_mean(compute_loss(self.inputs['label'], logits))
-        reg = 0.00025 * tf.reduce_sum([tf.reduce_sum(tf.square(v)) for v in w_final.values()])
+        reg = self.weight_decay * tf.reduce_sum([tf.reduce_sum(tf.square(v)) for v in w_final.values()])
         opt_loss = opt_loss + reg
 
         # Optimization
