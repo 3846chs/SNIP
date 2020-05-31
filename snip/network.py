@@ -1,4 +1,5 @@
 import tensorflow.compat.v1 as tf
+import sys
 tf.disable_v2_behavior()
 
 from functools import reduce
@@ -30,6 +31,15 @@ def load_network(
         'vgg-like': lambda: VGG(
             initializer_w_bp, initializer_b_bp, initializer_w_ap, initializer_b_ap,
             datasource, num_classes, version='like'),
+        'wrn-16-8': lambda: WRN(
+            initializer_w_bp, initializer_b_bp, initializer_w_ap, initializer_b_ap,
+            datasource, num_classes, depth=16, k=8),
+        'wrn-16-10': lambda: WRN(
+            initializer_w_bp, initializer_b_bp, initializer_w_ap, initializer_b_ap,
+            datasource, num_classes, depth=16, k=10),
+        'wrn-22-8': lambda: WRN(
+            initializer_w_bp, initializer_b_bp, initializer_w_ap, initializer_b_ap,
+            datasource, num_classes, depth=22, k=8),
     }
     return networks[arch]()
 
@@ -45,8 +55,6 @@ def get_initializer(initializer, dtype):
         return tf.random_normal_initializer(dtype=dtype) # RN
     elif initializer == 'tn':
         return tf.truncated_normal_initializer(dtype=dtype) # TN
-
-
     else:
         raise NotImplementedError
 
@@ -440,3 +448,162 @@ class VGG(object):
             inputs = tf.matmul(inputs, weights['w15']) + weights['b15']
 
         return inputs
+
+
+class WRN(object):
+    def __init__(self,
+                 initializer_w_bp,
+                 initializer_b_bp,
+                 initializer_w_ap,
+                 initializer_b_ap,
+                 datasource,
+                 num_classes,
+                 depth,
+                 k,
+                 ):
+        assert (depth - 4) % 6 == 0, 'depth should be 6n+4'
+        self.num_block = (depth - 4) // 6
+        self.widths = [int(v * k) for v in (16, 32, 64)]
+        self.datasource = datasource
+        self.num_classes = num_classes
+        self.name = 'WRN-{}-{}'.format(depth, k)
+        self.input_dims = [64, 64, 3] if self.datasource == 'tiny-imagenet' else [32, 32, 3] # h,w,c
+        self.inputs = self.construct_inputs()
+        self.weights_bp = self.construct_weights(initializer_w_bp, initializer_b_bp, False, 'bp')
+        self.weights_ap = self.construct_weights(initializer_w_ap, initializer_b_ap, True, 'ap')
+        self.num_params = sum([static_size(v) for v in self.weights_ap.values()])
+
+    def construct_inputs(self):
+        return {
+            'input': tf.placeholder(tf.float32, [None] + self.input_dims),
+            'label': tf.placeholder(tf.int32, [None]),
+        }
+
+    def construct_weights(self, initializer_w, initializer_b, trainable, scope):
+        dtype = tf.float32
+        w_params = {
+            'initializer': get_initializer(initializer_w, dtype),
+            'dtype': dtype,
+            'trainable': trainable,
+            'collections': [self.name, tf.GraphKeys.GLOBAL_VARIABLES],
+        }
+        b_params = {
+            'initializer': get_initializer(initializer_b, dtype),
+            'dtype': dtype,
+            'trainable': trainable,
+            'collections': [self.name, tf.GraphKeys.GLOBAL_VARIABLES],
+        }
+        weights = {}
+        with tf.variable_scope(scope):
+            weights['init-w0'] = tf.get_variable('init-w0', [3, 3, 3, 16], **w_params)
+            weights['init-b0'] = tf.get_variable('init-b0', [16], **b_params)
+            self.get_group_weights_biases(weights, 'group0', 
+                                          16, self.widths[0], 
+                                          w_params, b_params,
+                                          self.num_block)
+            self.get_group_weights_biases(weights, 'group1', 
+                                          self.widths[0], self.widths[1], 
+                                          w_params, b_params,
+                                          self.num_block)
+            self.get_group_weights_biases(weights, 'group2', 
+                                          self.widths[1], self.widths[2], 
+                                          w_params, b_params,
+                                          self.num_block)
+            weights['fc-w0'] = tf.get_variable('fc-w0', 
+                                               [self.widths[2], self.num_classes], 
+                                               **w_params)
+            weights['fc-b0'] = tf.get_variable('fc-b0',
+                                               [self.num_classes], 
+                                               **b_params)
+            # for k in weights:
+            #     print(k)
+            #     print(weights[k])
+            #     print()
+            # sys.exit("TODO: construct WRN model")
+        return weights
+    
+    def get_group_weights_biases(self, weights, tag_groub, ni, no, w_params, b_params, count_block):
+        for i in range(count_block):
+            tag_block = '{}-block{}'.format(tag_groub, i)
+            self.get_block_weights_biases(weights, tag_block, 
+                                          ni if i == 0 else no, no, 
+                                          w_params, b_params)
+
+    def get_block_weights_biases(self, weights, tag_block, ni, no, w_params, b_params):
+        tag_w0 = '{}-w0'.format(tag_block)
+        weights[tag_w0] = tf.get_variable(tag_w0, [3, 3, ni, no], **w_params)
+        tag_b0 = '{}-b0'.format(tag_block)
+        weights[tag_b0] = tf.get_variable(tag_b0, [no], **b_params)
+        tag_w1 = '{}-w1'.format(tag_block)
+        weights[tag_w1] = tf.get_variable(tag_w1, [3, 3, no, no], **w_params)
+        tag_b1 = '{}-b1'.format(tag_block)
+        weights[tag_b1] = tf.get_variable(tag_b1, [no], **b_params)
+        if ni != no:
+            tag_w2 = '{}-w2'.format(tag_block)
+            weights[tag_w2] = tf.get_variable(tag_w2, [1, 1, ni, no], **w_params)
+            tag_b2 = '{}-b2'.format(tag_block)
+            weights[tag_b2] = tf.get_variable(tag_b2, [no], **b_params)
+        return
+
+    def forward_pass(self, weights, inputs, is_train, trainable=True):
+        bn_params = {
+            'training': is_train,
+            'trainable': trainable,
+        }
+        init_st = 2 if self.datasource == 'tiny-imagenet' else 1
+
+        x = tf.nn.conv2d(inputs, weights['init-w0'], [1, init_st, init_st, 1], 'SAME') + weights['init-b0']
+        # print('x shape', x.shape)
+        g0 = self.forward_pass_group(weights, 'group0', x, is_train, trainable, bn_params, 1, self.num_block)
+        # print('g0 shape', g0.shape)
+        g1 = self.forward_pass_group(weights, 'group1', g0, is_train, trainable, bn_params, 2, self.num_block)
+        # print('g1 shape', g1.shape)
+        g2 = self.forward_pass_group(weights, 'group2', g1, is_train, trainable, bn_params, 2, self.num_block)
+        # print('g1 shape', g2.shape)
+        o = tf.layers.batch_normalization(g2, **bn_params)
+        o = tf.nn.relu(o)
+        # print('o shape', o.shape)
+        # global average pooling
+        gap = tf.layers.flatten(tf.reduce_mean(o, axis=[1, 2], keepdims=True))
+        # print('gap shape', gap.shape)
+        logits = tf.matmul(gap, weights['fc-w0']) + weights['fc-b0']
+        # print('logits shape', logits.shape)
+        return logits
+
+    def forward_pass_group(self, weights, tag_groub, inputs, 
+                           is_train, trainable, bn_params, stride, count_block):
+        o = inputs
+        for i in range(count_block):
+            tag_block = '{}-block{}'.format(tag_groub, i)
+            o = self.forward_pass_block(weights, tag_block, o,
+                                        is_train, trainable, bn_params, 
+                                        stride if i == 0 else 1)
+        return o
+    
+    def forward_pass_block(self, weights, tag_block, x, 
+                           is_train, trainable, bn_params, stride):
+        tag_w0 = '{}-w0'.format(tag_block)
+        tag_b0 = '{}-b0'.format(tag_block)
+        o1 = self.forward_pass_bn_relu(x, bn_params)
+        y = self.forward_pass_conv2d(o1, {'w': weights[tag_w0], 'b': weights[tag_b0]}, stride)
+
+        tag_w1 = '{}-w1'.format(tag_block)
+        tag_b1 = '{}-b1'.format(tag_block)
+        o2 = self.forward_pass_bn_relu(y, bn_params)
+        z = self.forward_pass_conv2d(o2, {'w': weights[tag_w1], 'b': weights[tag_b1]}, 1)
+        
+        tag_w2 = '{}-w2'.format(tag_block)
+        tag_b2 = '{}-b2'.format(tag_block)
+        if tag_w2 in weights:
+            return z + self.forward_pass_conv2d(o1, {'w': weights[tag_w2], 'b': weights[tag_b2]}, stride)
+        else:
+            return z + x
+    
+    def forward_pass_bn_relu(self, inputs, bn_params):
+        o = tf.layers.batch_normalization(inputs, **bn_params)
+        o = tf.nn.relu(o)
+        return o
+    
+    def forward_pass_conv2d(self, inputs, filt, st=1):
+        o = tf.nn.conv2d(inputs, filt['w'], [1, st, st, 1], 'SAME') + filt['b']
+        return o

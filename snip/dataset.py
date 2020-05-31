@@ -5,15 +5,45 @@ import numpy as np
 import mnist
 import cifar
 
+import urllib
+
+try:
+    from urllib.error import URLError
+    from urllib.request import urlretrieve
+except ImportError:
+    from urllib2 import URLError
+    from urllib import urlretrieve
+
+MNIST_RESOURCES = [
+    'train-images-idx3-ubyte.gz',
+    'train-labels-idx1-ubyte.gz',
+    't10k-images-idx3-ubyte.gz',
+    't10k-labels-idx1-ubyte.gz',
+]
 
 class Dataset(object):
     def __init__(self, datasource, path_data, **kwargs):
         self.datasource = datasource
         self.path_data = path_data
         self.rand = np.random.RandomState(9)
+        
+        if not os.path.exists(self.path_data):
+            original_umask = os.umask(0)
+            desired_permission = 0o0777
+            os.makedirs(self.path_data, desired_permission)
+            os.umask(original_umask)
+
         if self.datasource == 'mnist':
+            path = os.path.join(self.path_data, 'MNIST')
+
+            # TODO: need port forwarding docker container's tcp port to host's tcp port
+            # TODO: search how to use mnist library imported above
+            # for resource in MNIST_RESOURCES:
+                # url = 'http://yann.lecun.com/exdb/mnist/{}'.format(resource)
+                # download(path, url)
+
             self.num_classes = 10
-            self.dataset = mnist.read_data(os.path.join(self.path_data, 'MNIST'))
+            self.dataset = mnist.read_data(path)
         elif self.datasource == 'cifar-10':
             self.num_classes = 10
             self.dataset = cifar.read_data(os.path.join(self.path_data, 'cifar-10-batches-py'))
@@ -71,3 +101,24 @@ class Dataset(object):
         ind_remain = indices[number:]
         self.dataset[target] = {k: self.dataset[source][k][ind_target] for k in keys}
         self.dataset[source] = {k: self.dataset[source][k][ind_remain] for k in keys}
+
+# copied from https://gist.github.com/goldsborough/6dd52a5e01ed73a642c1e772084bcd03 
+# and revised by cmpark
+def download(destination_path, url):
+    if os.path.exists(destination_path):
+        print('{} already exists, skipping ...'.format(destination_path))
+    else:
+        print('Downloading {} ...'.format(url))
+        try:
+            urlretrieve(url, destination_path)
+        except URLError:
+            raise RuntimeError('Error downloading resource!')
+        finally:
+            # Just a newline.
+            print()
+
+def report_download_progress(chunk_number, chunk_size, file_size):
+    if file_size != -1:
+        percent = min(1, (chunk_number * chunk_size) / file_size)
+        bar = '#' * int(64 * percent)
+        sys.stdout.write('\r0% |{:<64}| {}%'.format(bar, int(percent * 100)))
