@@ -18,6 +18,7 @@ def train(args, model, sess, dataset):
     writer['val'] = tf.summary.FileWriter(args.path_summary + '/val')
     t_start = time.time()
 
+    best_val_loss = 100
     for itr in range(args.train_iterations):
         batch = dataset.get_next_batch('train', 100)
         batch = augment(batch, args.aug_kinds, random_state)
@@ -44,14 +45,22 @@ def train(args, model, sess, dataset):
         if (itr+1) % args.check_interval == 0:
             writer['train'].add_summary(result[1], itr)
             writer['val'].add_summary(result_val[1], itr)
-            pstr = '(train/val) los:{:.3f}/{:.3f} acc:{:.3f}/{:.3f} spa:{:.3f}'.format(
+            pstr = '(train/val) los:{:.3f}/{:.3f} acc:{:.3f}/{:.3f} spa:{:.3f} lr:{:.7f}'.format(
                 result[0]['los'], result_val[0]['los'],
                 result[0]['acc'], result_val[0]['acc'],
-                result[2],
+                result[2], result[0]['lr'],
             )
             print('itr{}: {} (t:{:.1f})'.format(itr+1, pstr, time.time() - t_start))
             t_start = time.time()
 
-        # Save model
-        if (itr+1) % args.save_interval == 0:
-            saver.save(sess, args.path_model + '/itr-' + str(itr))
+            # Save model
+            if best_val_loss > result_val[0]['los']:
+                print('save model, becase best_val_loss({:.3f}) > current_val_loss({:.3f})'.format(
+                    best_val_loss, result_val[0]['los']
+                ))
+                saver.save(sess, args.path_model + '/itr-' + str(itr))
+                best_val_loss = result_val[0]['los']
+
+        # # Save model
+        # if (itr+1) % args.save_interval == 0:
+        #     saver.save(sess, args.path_model + '/itr-' + str(itr))

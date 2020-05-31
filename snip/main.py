@@ -24,10 +24,15 @@ def parse_arguments():
     parser.add_argument('--batch_size', type=int, default=100, help='number of examples per mini-batch')
     parser.add_argument('--train_iterations', type=int, default=10000, help='number of training iterations')
     parser.add_argument('--optimizer', type=str, default='sgd', help='optimizer of choice')
+    parser.add_argument('--weight_decay', type=float, default=5e-4, help='TBD')
     parser.add_argument('--lr_decay_type', type=str, default='constant', help='learning rate decay type')
     parser.add_argument('--lr', type=float, default=1e-1, help='initial learning rate')
     parser.add_argument('--decay_boundaries', nargs='+', type=int, default=[], help='boundaries for piecewise_constant decay')
     parser.add_argument('--decay_values', nargs='+', type=float, default=[], help='values for piecewise_constant decay')
+    # for polynomial learning rate decay
+    parser.add_argument('--decay_steps', type=float, default=10000, help='TBD')
+    parser.add_argument('--end_learning_rate', type=float, default=1e-1, help='TBD')
+    parser.add_argument('--power', type=float, default=2.0, help='TBD')
     # Initialization
     parser.add_argument('--initializer_w_bp', type=str, default='vs-h', help='initializer for w before pruning')
     parser.add_argument('--initializer_b_bp', type=str, default='zeros', help='initializer for b before pruning')

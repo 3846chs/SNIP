@@ -12,10 +12,14 @@ class Model(object):
                  num_classes,
                  target_sparsity,
                  optimizer,
+                 weight_decay,
                  lr_decay_type,
                  lr,
                  decay_boundaries,
                  decay_values,
+                 decay_steps,
+                 end_learning_rate,
+                 power,
                  initializer_w_bp,
                  initializer_b_bp,
                  initializer_w_ap,
@@ -26,10 +30,14 @@ class Model(object):
         self.num_classes = num_classes
         self.target_sparsity = target_sparsity
         self.optimizer = optimizer
+        self.weight_decay = weight_decay
         self.lr_decay_type = lr_decay_type
         self.lr = lr
         self.decay_boundaries = decay_boundaries
         self.decay_values = decay_values
+        self.decay_steps = decay_steps
+        self.end_learning_rate = end_learning_rate
+        self.power = power
         self.initializer_w_bp = initializer_w_bp
         self.initializer_b_bp = initializer_b_bp
         self.initializer_w_ap = initializer_w_ap
@@ -95,12 +103,13 @@ class Model(object):
 
         # Loss
         opt_loss = tf.reduce_mean(compute_loss(self.inputs['label'], logits))
-        reg = 0.00025 * tf.reduce_sum([tf.reduce_sum(tf.square(v)) for v in w_final.values()])
+        reg = self.weight_decay * tf.reduce_sum([tf.reduce_sum(tf.square(v)) for v in w_final.values()])
         opt_loss = opt_loss + reg
 
         # Optimization
         optim, lr, global_step = prepare_optimization(opt_loss, self.optimizer, self.lr_decay_type,
-            self.lr, self.decay_boundaries, self.decay_values)
+            self.lr, self.decay_boundaries, self.decay_values, self.decay_steps, 
+            self.end_learning_rate, self.power)
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS) # TF version issue
         with tf.control_dependencies(update_ops):
             self.train_op = optim.minimize(opt_loss, global_step=global_step)
@@ -115,6 +124,7 @@ class Model(object):
             'los': opt_loss,
             'acc': output_accuracy,
             'acc_individual': output_accuracy_individual,
+            'lr': lr,
         }
         self.sparsity = compute_sparsity(w_final, prn_keys)
 
@@ -141,13 +151,21 @@ def get_optimizer(optimizer, lr):
         raise NotImplementedError
     return optimizer
 
-def prepare_optimization(loss, optimizer, lr_decay_type, learning_rate, boundaries, values):
+def prepare_optimization(loss, optimizer, lr_decay_type, learning_rate, 
+                         boundaries, values, decay_steps, end_learning_rate, power):
     global_step = tf.Variable(0, trainable=False)
     if lr_decay_type == 'constant':
         learning_rate = tf.constant(learning_rate)
     elif lr_decay_type == 'piecewise':
         assert len(boundaries)+1 == len(values)
         learning_rate = tf.train.piecewise_constant(global_step, boundaries, values)
+    elif lr_decay_type == 'polynomial':
+        learning_rate = tf.train.polynomial_decay(
+                            learning_rate,
+                            global_step, 
+                            decay_steps,
+                            end_learning_rate,
+                            power)
     else:
         raise NotImplementedError
     optim = get_optimizer(optimizer, learning_rate)
