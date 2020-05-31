@@ -20,7 +20,7 @@ def train(args, model, sess, dataset):
 
     best_val_loss = 100
     for itr in range(args.train_iterations):
-        batch = dataset.get_next_batch('train', 100)
+        batch = dataset.get_next_batch('train', args.training_batch_size)
         batch = augment(batch, args.aug_kinds, random_state)
         feed_dict = {}
         feed_dict.update({model.inputs[key]: batch[key] for key in ['input', 'label']})
@@ -33,7 +33,7 @@ def train(args, model, sess, dataset):
 
         # Check on validation set.
         if (itr+1) % args.check_interval == 0:
-            batch = dataset.get_next_batch('val', 100)
+            batch = dataset.get_next_batch('val', args.training_batch_size)
             batch = augment(batch, args.aug_kinds, random_state)
             feed_dict = {}
             feed_dict.update({model.inputs[key]: batch[key] for key in ['input', 'label']})

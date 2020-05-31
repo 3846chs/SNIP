@@ -22,6 +22,7 @@ def parse_arguments():
     parser.add_argument('--target_sparsity', type=float, default=0.9, help='level of sparsity to achieve')
     # Train options
     parser.add_argument('--batch_size', type=int, default=100, help='number of examples per mini-batch')
+    parser.add_argument('--training_batch_size', type=int, default=100, help='number of examples per mini-batch (for only training')
     parser.add_argument('--train_iterations', type=int, default=10000, help='number of training iterations')
     parser.add_argument('--optimizer', type=str, default='sgd', help='optimizer of choice')
     parser.add_argument('--weight_decay', type=float, default=5e-4, help='TBD')
