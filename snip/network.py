@@ -40,6 +40,18 @@ def load_network(
         'wrn-22-8': lambda: WRN(
             initializer_w_bp, initializer_b_bp, initializer_w_ap, initializer_b_ap,
             datasource, num_classes, depth=22, k=8),
+        'lstm-s': lambda: LSTM(
+            initializer_w_bp, initializer_b_bp, initializer_w_ap, initializer_b_ap,
+            datasource, num_classes, 128,),
+        'lstm-b': lambda: LSTM(
+            initializer_w_bp, initializer_b_bp, initializer_w_ap, initializer_b_ap,
+            datasource, num_classes, 256,),
+        'gru-s': lambda: GRU(
+            initializer_w_bp, initializer_b_bp, initializer_w_ap, initializer_b_ap,
+            datasource, num_classes, 128,),
+        'gru-b': lambda: GRU(
+            initializer_w_bp, initializer_b_bp, initializer_w_ap, initializer_b_ap,
+            datasource, num_classes, 256,),
     }
     return networks[arch]()
 
@@ -607,3 +619,225 @@ class WRN(object):
     def forward_pass_conv2d(self, inputs, filt, st=1):
         o = tf.nn.conv2d(inputs, filt['w'], [1, st, st, 1], 'SAME') + filt['b']
         return o
+
+
+class LSTM(object):
+    def __init__(self,
+                 initializer_w_bp,
+                 initializer_b_bp,
+                 initializer_w_ap,
+                 initializer_b_ap,
+                 datasource,
+                 num_classes,
+                 hidden_unit
+                 ):
+        self.datasource = datasource
+        self.num_classes = num_classes
+        self.name = 'LSTM'
+        self.n_chunks = 28
+        self.input_nodes = 28
+        self.hidden_unit = hidden_unit
+        self.input_dims = [28, 28, 1]  # height, width, channel
+        self.batch_size = 100
+        self.inputs = self.construct_inputs()
+        self.weights_bp = self.construct_weights(initializer_w_bp, initializer_b_bp, False, 'bp')
+        self.weights_ap = self.construct_weights(initializer_w_ap, initializer_b_ap, True, 'ap')
+        self.weights_ = None
+        self.num_params = sum([static_size(v) for v in self.weights_ap.values()])
+
+    def construct_inputs(self):
+        return {
+            'input': tf.placeholder(tf.float32, [None] + self.input_dims),
+            'label': tf.placeholder(tf.int32, [None]),
+        }
+
+    def construct_weights(self, initializer_w, initializer_b, trainable, scope):
+        dtype = tf.float32
+        w_params = {
+            'initializer': get_initializer(initializer_w, dtype),
+            'dtype': dtype,
+            'trainable': trainable,
+            'collections': [self.name, tf.GraphKeys.GLOBAL_VARIABLES],
+        }
+        u_params = {
+            'initializer': get_initializer(initializer_w, dtype),
+            'dtype': dtype,
+            'trainable': trainable,
+            'collections': [self.name, tf.GraphKeys.GLOBAL_VARIABLES],
+        }
+        b_params = {
+            'initializer': get_initializer(initializer_b, dtype),
+            'dtype': dtype,
+            'trainable': trainable,
+            'collections': [self.name, tf.GraphKeys.GLOBAL_VARIABLES],
+        }
+
+        weights = {}
+        with tf.variable_scope(scope):
+            weights['wi'] = tf.get_variable('wi', [self.input_nodes, self.hidden_unit], **w_params)
+            weights['ui'] = tf.get_variable('ui', [self.hidden_unit, self.hidden_unit], **u_params)
+            weights['bi'] = tf.get_variable('bi', [self.hidden_unit], **b_params)
+
+            weights['wf'] = tf.get_variable('wf', [self.input_nodes, self.hidden_unit], **w_params)
+            weights['uf'] = tf.get_variable('uf', [self.hidden_unit, self.hidden_unit], **u_params)
+            weights['bf'] = tf.get_variable('bf', [self.hidden_unit], **b_params)
+
+            weights['wog'] = tf.get_variable('wog', [self.input_nodes, self.hidden_unit], **w_params)
+            weights['uog'] = tf.get_variable('uog', [self.hidden_unit, self.hidden_unit], **u_params)
+            weights['bog'] = tf.get_variable('bog', [self.hidden_unit], **b_params)
+
+            weights['wc'] = tf.get_variable('wc', [self.input_nodes, self.hidden_unit], **w_params)
+            weights['uc'] = tf.get_variable('uc', [self.hidden_unit, self.hidden_unit], **u_params)
+            weights['bc'] = tf.get_variable('bc', [self.hidden_unit], **b_params)
+
+            weights['fc-w'] = tf.get_variable('fc-w', [self.hidden_unit, self.num_classes], **w_params)
+            weights['fc-b'] = tf.get_variable('fc-b', [self.num_classes], **b_params)
+
+        return weights
+
+    def forward_pass(self, weights, inputs, is_train, trainable=True):
+        reshaped_inputs = tf.reshape(inputs, [-1, self.n_chunks, self.input_nodes])
+
+        batch_input_ = tf.transpose(reshaped_inputs, [2, 0, 1])
+        processed_input = tf.transpose(batch_input_)
+
+        initial_hidden = reshaped_inputs[:, 0, :]
+        initial_hidden = tf.matmul(initial_hidden, tf.zeros([self.input_nodes, self.hidden_unit]))
+        initial_hidden = tf.stack([initial_hidden, initial_hidden])
+
+        self.weights_ = weights
+        all_hidden_states = self.forward_pass_states(processed_input, initial_hidden)
+        all_outputs = tf.map_fn(self.forward_pass_output, all_hidden_states)
+
+        return all_outputs[-1]
+
+    def forward_pass_states(self, processed_input, initial_hidden):
+        all_hidden_states = tf.scan(
+            self.forward_pass_lstm,
+            processed_input,
+            initializer=initial_hidden,
+            name='states')
+        all_hidden_states = all_hidden_states[:, 0, :, :]
+        return all_hidden_states
+
+    def forward_pass_lstm(self, previous_hidden_memory_tuple, x):
+        previous_hidden_state, c_prev = tf.unstack(previous_hidden_memory_tuple)
+
+        i = tf.sigmoid(tf.matmul(x, self.weights_['wi']) +
+                       tf.matmul(previous_hidden_state, self.weights_['ui']) + self.weights_['bi'])
+
+        f = tf.sigmoid(tf.matmul(x, self.weights_['wf']) +
+                       tf.matmul(previous_hidden_state, self.weights_['uf']) + self.weights_['bf'])
+
+        o = tf.sigmoid(tf.matmul(x, self.weights_['wog']) +
+                       tf.matmul(previous_hidden_state, self.weights_['uog']) + self.weights_['bog'])
+
+        c_ = tf.nn.tanh(tf.matmul(x, self.weights_['wc']) +
+                        tf.matmul(previous_hidden_state, self.weights_['uc']) + self.weights_['bc'])
+
+        c = f * c_prev + i * c_
+        current_hidden_state = o * tf.nn.tanh(c)
+
+        return tf.stack([current_hidden_state, c])
+
+    def forward_pass_output(self, hidden_state):
+        return tf.matmul(hidden_state, self.weights_['fc-w']) + self.weights_['fc-b']
+
+
+class GRU(object):
+    def __init__(self,
+                 initializer_w_bp,
+                 initializer_b_bp,
+                 initializer_w_ap,
+                 initializer_b_ap,
+                 datasource,
+                 num_classes,
+                 hidden_unit
+                 ):
+        self.datasource = datasource
+        self.num_classes = num_classes
+        self.name = 'GRU'
+        self.n_chunks = 28
+        self.input_nodes = 28
+        self.hidden_unit = hidden_unit
+        self.input_dims = [28, 28, 1]  # height, width, channel
+        self.batch_size = 100
+        self.inputs = self.construct_inputs()
+        self.weights_bp = self.construct_weights(initializer_w_bp, initializer_b_bp, False, 'bp')
+        self.weights_ap = self.construct_weights(initializer_w_ap, initializer_b_ap, True, 'ap')
+        self.weights_ = None
+        self.num_params = sum([static_size(v) for v in self.weights_ap.values()])
+
+    def construct_inputs(self):
+        return {
+            'input': tf.placeholder(tf.float32, [None] + self.input_dims),
+            'label': tf.placeholder(tf.int32, [None]),
+        }
+
+    def construct_weights(self, initializer_w, initializer_b, trainable, scope):
+        dtype = tf.float32
+        w_params = {
+            'initializer': get_initializer(initializer_w, dtype),
+            'dtype': dtype,
+            'trainable': trainable,
+            'collections': [self.name, tf.GraphKeys.GLOBAL_VARIABLES],
+        }
+        b_params = {
+            'initializer': get_initializer(initializer_b, dtype),
+            'dtype': dtype,
+            'trainable': trainable,
+            'collections': [self.name, tf.GraphKeys.GLOBAL_VARIABLES],
+        }
+
+        weights = {}
+        with tf.variable_scope(scope):
+            weights['wr'] = tf.get_variable('wr', [self.input_nodes, self.hidden_unit], **w_params)
+            weights['br'] = tf.get_variable('br', [self.hidden_unit], **b_params)
+
+            weights['wz'] = tf.get_variable('wz', [self.input_nodes, self.hidden_unit], **w_params)
+            weights['bz'] = tf.get_variable('bz', [self.hidden_unit], **b_params)
+
+            weights['wx'] = tf.get_variable('wx', [self.input_nodes, self.hidden_unit], **w_params)
+            weights['wh'] = tf.get_variable('wh', [self.hidden_unit, self.hidden_unit], **w_params)
+
+            weights['wo'] = tf.get_variable('wo', [self.hidden_unit, self.num_classes], **w_params)
+            weights['bo'] = tf.get_variable('bo', [self.num_classes], **b_params)
+
+        return weights
+
+    def forward_pass(self, weights, inputs, is_train, trainable=True):
+        reshaped_inputs = tf.reshape(inputs, [-1, self.n_chunks, self.input_nodes])
+
+        batch_input_ = tf.transpose(reshaped_inputs, [2, 0, 1])
+        processed_input = tf.transpose(batch_input_)
+
+        initial_hidden = reshaped_inputs[:, 0, :]
+        initial_hidden = tf.matmul(initial_hidden, tf.zeros([self.input_nodes, self.hidden_unit]))
+
+        self.weights_ = weights
+        all_hidden_states = self.forward_pass_states(processed_input, initial_hidden)
+        all_outputs = tf.map_fn(self.forward_pass_output, all_hidden_states)
+
+        return all_outputs[-1]
+
+    def forward_pass_states(self, processed_input, initial_hidden):
+        all_hidden_states = tf.scan(
+            self.forward_pass_gru,
+            processed_input,
+            initializer=initial_hidden,
+            name='states')
+        return all_hidden_states
+
+    def forward_pass_gru(self, previous_hidden_state, x):
+        z = tf.sigmoid(tf.matmul(x, self.weights_['wz']) + self.weights_['bz'])
+        r = tf.sigmoid(tf.matmul(x, self.weights_['wr']) + self.weights_['br'])
+
+        h_ = tf.tanh(tf.matmul(x, self.weights_['wx']) +
+                     tf.matmul(previous_hidden_state, self.weights_['wh']) * r)
+
+        current_hidden_state = tf.multiply((1 - z), h_) + tf.multiply(previous_hidden_state, z)
+
+        return current_hidden_state
+
+    def forward_pass_output(self, hidden_state):
+        return tf.nn.relu(tf.matmul(hidden_state, self.weights_['wo']) + self.weights_['bo'])

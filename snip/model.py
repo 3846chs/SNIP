@@ -71,7 +71,7 @@ class Model(object):
 
         # For convenience
         # e.g., ['w1', 'w2', 'w3', 'w4', 'b1', 'b2', 'b3', 'b4']
-        prn_keys = [k for p in ['w', 'b'] for k in weights.keys() if p in k]
+        prn_keys = [k for p in ['w', 'u', 'b'] for k in weights.keys() if p in k]
         # Create partial function
         # https://docs.python.org/2/library/functools.html#functools.partial
         var_no_train = functools.partial(tf.Variable, trainable=False, dtype=tf.float32)
@@ -108,7 +108,7 @@ class Model(object):
 
         # Optimization
         optim, lr, global_step = prepare_optimization(opt_loss, self.optimizer, self.lr_decay_type,
-            self.lr, self.decay_boundaries, self.decay_values, self.decay_steps, 
+            self.lr, self.decay_boundaries, self.decay_values, self.decay_steps,
             self.end_learning_rate, self.power)
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS) # TF version issue
         with tf.control_dependencies(update_ops):
@@ -151,7 +151,7 @@ def get_optimizer(optimizer, lr):
         raise NotImplementedError
     return optimizer
 
-def prepare_optimization(loss, optimizer, lr_decay_type, learning_rate, 
+def prepare_optimization(loss, optimizer, lr_decay_type, learning_rate,
                          boundaries, values, decay_steps, end_learning_rate, power):
     global_step = tf.Variable(0, trainable=False)
     if lr_decay_type == 'constant':
@@ -162,7 +162,7 @@ def prepare_optimization(loss, optimizer, lr_decay_type, learning_rate,
     elif lr_decay_type == 'polynomial':
         learning_rate = tf.train.polynomial_decay(
                             learning_rate,
-                            global_step, 
+                            global_step,
                             decay_steps,
                             end_learning_rate,
                             power)

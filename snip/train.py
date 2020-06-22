@@ -2,7 +2,7 @@ import os
 import tensorflow.compat.v1 as tf
 import time
 import numpy as np
-np.random._bit_generator = np.random.bit_generator
+# np.random._bit_generator = np.random.bit_generator
 
 from augment import augment
 
